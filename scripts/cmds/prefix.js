@@ -5,20 +5,23 @@ const { utils } = global;
 module.exports = {
   config: {
     name: "prefix",
-    version: "4.0",
+    version: "4.1",
     author: "Light",
     countDown: 5,
     role: 0,
-    description: "Change prefix + show random local video",
+    shortDescription: "Change prefix + show random video",
+    longDescription: "Change group/global prefix or show current prefix with random intro video",
     category: "config"
   },
 
   onStart: async function ({ message, role, args, commandName, event, threadsData }) {
-    if (!args[0]) return message.SyntaxError();
+    if (!args[0]) {
+      return message.reply("⚠️ Please provide a new prefix!\nExample: prefix !  or  prefix reset");
+    }
 
-    if (args[0] == 'reset') {
+    if (args[0].toLowerCase() === "reset") {
       await threadsData.set(event.threadID, null, "data.prefix");
-      return message.reply("✅ Prefix reset to default.");
+      return message.reply("✅ Prefix has been reset to default (global prefix).");
     }
 
     const newPrefix = args[0];
@@ -29,79 +32,84 @@ module.exports = {
     };
 
     if (args[1] === "-g") {
-      if (role < 2) return message.reply("❌ Only admin can change global prefix");
+      if (role < 2) {
+        return message.reply("❌ Only bot admins can change the **global** prefix.");
+      }
       formSet.setGlobal = true;
     } else {
       formSet.setGlobal = false;
     }
 
-    return message.reply("⚠ React to confirm prefix change", (err, info) => {
+    return message.reply("⚠️ React to this message to confirm prefix change", (err, info) => {
+      if (err) return;
       formSet.messageID = info.messageID;
       global.GoatBot.onReaction.set(info.messageID, formSet);
     });
   },
 
   onReaction: async function ({ message, threadsData, event, Reaction }) {
-    const { author, newPrefix, setGlobal } = Reaction;
+    const { author, newPrefix, setGlobal, messageID } = Reaction;
+
     if (event.userID !== author) return;
+
+    // Clean up reaction handler
+    global.GoatBot.onReaction.delete(messageID);
 
     if (setGlobal) {
       global.GoatBot.config.prefix = newPrefix;
-      // যদি তোমার bot-এ config save function থাকে তাহলে এখানে কল করো
+      // Important: most GoatBot forks require saving config
+      // Uncomment/adapt the line below according to your bot version
       // await global.GoatBot.saveConfig?.();
-      return message.reply("✅ Global prefix changed to: " + newPrefix);
+
+      return message.reply(`✅ **Global prefix** changed to: **${newPrefix}**`);
     } else {
       await threadsData.set(event.threadID, newPrefix, "data.prefix");
-      return message.reply("✅ Group prefix changed to: " + newPrefix);
+      return message.reply(`✅ **Group prefix** changed to: **${newPrefix}**`);
     }
   },
 
   onChat: async function ({ event, message, usersData }) {
-    if (event.body && event.body.toLowerCase() === "prefix") {
-      const userName = await usersData.getName(event.senderID).catch(() => "Friend");
-      const botName = global.GoatBot.config.nickNameBot || "Bot";
+    if (!event.body) return;
+    if (event.body.toLowerCase() !== "prefix") return;
 
-      const videoDir = path.join(__dirname, "assets");
+    const userName = await usersData.getName(event.senderID).catch(() => "Friend");
+    const botName = global.GoatBot.config.nickNameBot || "Light";
 
-      // assets ফোল্ডার থেকে সব prefix*.mp4 ফাইল খুঁজে বের করা
-      let prefixVideos = [];
-      try {
-        const allFiles = fs.readdirSync(videoDir);
-        prefixVideos = allFiles.filter(file => 
-          file.toLowerCase().startsWith("prefix") && 
-          file.toLowerCase().endsWith(".mp4")
-        );
-      } catch (err) {
-        console.error("assets folder read error:", err);
-      }
+    const videoDir = path.join(__dirname, "assets");
+    let prefixVideos = [];
 
-      let videoPath;
+    try {
+      const files = fs.readdirSync(videoDir);
+      prefixVideos = files.filter(f => 
+        f.toLowerCase().startsWith("prefix") && 
+        f.toLowerCase().endsWith(".mp4")
+      );
+    } catch (err) {
+      console.error("[prefix] Cannot read assets folder:", err.message);
+    }
 
-      if (prefixVideos.length === 0) {
-        return message.reply("❌ কোনো prefix*.mp4 ভিডিও assets ফোল্ডারে পাওয়া যায়নি!");
-      }
+    let bodyText = 
+      `👋 Hey ${userName}\n` +
+      `➥ 🌐 Global prefix: ${global.GoatBot.config.prefix}\n` +
+      `➥ 💬 This chat prefix: ${utils.getPrefix(event.threadID) || global.GoatBot.config.prefix}\n\n` +
+      `I'm ${botName} — at your service 🫡`;
 
-      // র‍্যান্ডম একটা বেছে নেওয়া
-      const randomFile = prefixVideos[Math.floor(Math.random() * prefixVideos.length)];
-      videoPath = path.join(videoDir, randomFile);
+    if (prefixVideos.length === 0) {
+      return message.reply(bodyText + "\n\n❌ No prefix*.mp4 videos found in assets folder.");
+    }
 
-      const prefixThisGroup = utils.getPrefix(event.threadID) || global.GoatBot.config.prefix;
+    // Choose random video
+    const randomFile = prefixVideos[Math.floor(Math.random() * prefixVideos.length)];
+    const videoPath = path.join(videoDir, randomFile);
 
-      const bodyText = 
-        `👋 হ্যাঁ ${userName}\n` +
-        `➥ 🌐 Global: ${global.GoatBot.config.prefix}\n` +
-        `➥ 💬 This Chat: ${prefixThisGroup}\n\n` +
-        `আমি ${botName} — তোমার সেবায় প্রস্তুত 🫡`;
-
-      try {
-        return message.reply({
-          body: bodyText,
-          attachment: fs.createReadStream(videoPath)
-        });
-      } catch (err) {
-        console.error("Video send error:", err);
-        return message.reply(bodyText + "\n\n(ভিডিও পাঠাতে সমস্যা হয়েছে)");
-      }
+    try {
+      await message.reply({
+        body: bodyText,
+        attachment: fs.createReadStream(videoPath)
+      });
+    } catch (err) {
+      console.error("[prefix] Cannot send video:", err.message);
+      await message.reply(bodyText + "\n\n(⚠️ Could not send the intro video)");
     }
   }
 };
