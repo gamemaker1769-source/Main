@@ -16,7 +16,7 @@ module.exports = {
 
   onStart: async function ({ api, event, args, message }) {
     const botID = api.getCurrentUserID();
-    const ownerID = "100022952830933"; // your owner UID
+    const ownerID = "100022952830933"; // ← your owner UID
     const senderID = event.senderID;
     const currentTID = event.threadID;
 
@@ -31,7 +31,7 @@ module.exports = {
     // ─── .out all ─── Leave all other groups except current
     if (args[0] && args[0].toLowerCase() === "all") {
       try {
-        // Fetch up to 100 recent threads (FB usually limits this anyway)
+        // Fetch up to 100 recent threads (FB usually limits this)
         const threads = await api.getThreadList(100, null, ["INBOX"]);
         const otherGroups = threads.filter(
           t => t.isGroup && String(t.threadID) !== String(currentTID)
@@ -41,7 +41,7 @@ module.exports = {
           return message.reply("No other groups found where Light is present.");
         }
 
-        await message.reply(Light is preparing to leave ${otherGroups.length} other group(s)...);
+        await message.reply(`Light is preparing to leave ${otherGroups.length} other group(s)...`);
 
         let success = 0;
         let failed = 0;
@@ -53,14 +53,14 @@ module.exports = {
             success++;
           } catch (err) {
             failed++;
-            console.log(Failed to leave group ${group.threadID}: ${err.message || err});
+            console.log(`Failed to leave group ${group.threadID}: ${err.message || err}`);
           }
         }
 
         return message.reply(
-          Operation completed!\n\n +
-          Successfully left: ${success} group(s)\n +
-          Failed to leave: ${failed} group(s)
+          `Operation completed!\n\n` +
+          `Successfully left: ${success} group(s)\n` +
+          `Failed to leave: ${failed} group(s)`
         );
       } catch (err) {
         console.error("Error fetching threads (all mode):", err);
@@ -68,7 +68,7 @@ module.exports = {
       }
     }
 
-    // ─── .out   or   .out <threadID> ─── Leave specific/current group
+    // ─── .out   or   .out <threadID> ─── Leave specific / current group
     let targetTID = currentTID;
 
     if (args[0]) {
@@ -79,22 +79,22 @@ module.exports = {
     }
 
     try {
-      // Attempt goodbye message (will fail silently in many cases: no perm, already left, etc.)
+      // Try to send goodbye message (fails silently if no permission / already left / etc.)
       try {
         await api.sendMessage("𝙻𝙸𝙶𝙷𝚃 𝙸𝚂 𝙻𝙴𝙰𝚅𝙸𝙽𝙶 𝚃𝙷𝙸𝚂 𝙶𝚁𝙾𝚄𝙿... 👋", targetTID);
       } catch (silentErr) {
-        // Common & harmless — ignore
+        // ignore – very common
       }
 
       await api.removeUserFromGroup(botID, targetTID);
 
-      // Reply only if leaving a different group (current group → reply impossible after leave)
+      // Only reply if leaving a DIFFERENT group
       if (String(targetTID) !== String(currentTID)) {
-        return message.reply(Light has successfully left group ${targetTID}.);
+        return message.reply(`Light has successfully left group ${targetTID}.`);
       }
 
-      // Current group leave → just log (no message possible anymore)
-      console.log(Light left the current group: ${currentTID});
+      // Current group → can't reply after leaving, just log
+      console.log(`Light left the current group: ${currentTID}`);
 
     } catch (error) {
       console.error("Leave failed:", error);
