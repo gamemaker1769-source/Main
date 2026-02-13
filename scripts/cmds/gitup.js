@@ -6,47 +6,48 @@ module.exports = {
   config: {
     name: "gitup",
     aliases: ["upsh", "github"],
-    version: "2.5",
+    version: "2.7",
     author: "Light",
     shortDescription: "Upload/Create file to GitHub",
-    longDescription: "Upload existing file or create a new file from content to GitHub.",
+    longDescription: "Sync local files or create new files on GitHub directly from chat.",
     category: "owner",
     role: 4 
   },
 
   onStart: async function ({ api, event, args }) {
+    // This pulls the token SECURELY from Render Environment Variables
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN; 
     const REPO_OWNER = "gamemaker1769-source"; 
     const REPO_NAME = "Main";                  
     const BRANCH = "main";                     
 
     if (!GITHUB_TOKEN) {
-      return api.sendMessage("❌ Error: GITHUB_TOKEN not found in Render Environment Variables.", event.threadID);
+      return api.sendMessage("❌ Error: GITHUB_TOKEN not found in Render Environment Variables. Please add it in Render Settings.", event.threadID);
     }
 
     if (args.length < 1) {
-      return api.sendMessage("⚠️ Usage:\n1. For existing file: gitup <path>\n2. To create new: gitup <path> <code>", event.threadID);
+      return api.sendMessage("⚠️ Usage:\n1. Upload Existing: .gitup <path>\n2. Create New: .gitup <path> <code>", event.threadID);
     }
 
     const filePath = args[0];
     const fileContentFromArgs = args.slice(1).join(" ");
     let finalContent = "";
 
-    // চেক করা হচ্ছে ফাইলটি লোকালি আছে কি না
+    // 1. Check if file exists in bot storage
     if (fs.existsSync(filePath)) {
       finalContent = fs.readFileSync(filePath, 'base64');
     } 
-    // যদি না থাকে এবং আপনি নতুন কোড দিয়ে থাকেন
+    // 2. If not in storage, use the code provided in the message
     else if (fileContentFromArgs) {
       finalContent = Buffer.from(fileContentFromArgs).toString('base64');
-      api.sendMessage(`📝 Local file not found. Creating a new file on GitHub with provided content...`, event.threadID);
+      api.sendMessage(`📝 File not found locally. Creating new file '${path.basename(filePath)}' on GitHub using provided code...`, event.threadID);
     } 
     else {
-      return api.sendMessage(`❌ Error: File not found at '${filePath}' and no code content was provided to create a new one.`, event.threadID);
+      return api.sendMessage(`❌ Error: No file found at '${filePath}' and no code was provided to create one.`, event.threadID);
     }
 
     try {
-      const waitMsg = await api.sendMessage("⏳ Processing GitHub upload...", event.threadID);
+      const waitMsg = await api.sendMessage("⏳ Connecting to GitHub API...", event.threadID);
       const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
 
       let sha = "";
@@ -55,22 +56,26 @@ module.exports = {
           headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
         sha = data.sha;
-      } catch (err) { /* File is new */ }
+      } catch (err) { /* New file path */ }
 
       await axios.put(url, {
-        message: `Updated/Created ${path.basename(filePath)} via Bot`,
+        message: `Sync ${path.basename(filePath)} via Bot`,
         content: finalContent,
         sha: sha || undefined,
         branch: BRANCH
       }, {
-        headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        headers: { 
+          Authorization: `token ${GITHUB_TOKEN}`,
+          "Content-Type": "application/json"
+        }
       });
 
-      api.unsendMessage(waitMsg.messageID); 
-      api.sendMessage(`✅ Successfully synced '${path.basename(filePath)}' to GitHub!`, event.threadID);
+      if (waitMsg.messageID) api.unsendMessage(waitMsg.messageID); 
+      api.sendMessage(`✅ **Successfully Synced!**\n\n📂 **File:** ${path.basename(filePath)}\n📦 **Repo:** ${REPO_NAME}`, event.threadID);
 
     } catch (error) {
-      api.sendMessage(`❌ GitHub Error: ${error.response?.data?.message || error.message}`, event.threadID);
+      const errorMsg = error.response?.data?.message || error.message;
+      api.sendMessage(`❌ **GitHub Error:** ${errorMsg}`, event.threadID);
     }
   }
 };
