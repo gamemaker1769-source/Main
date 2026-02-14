@@ -1,7 +1,7 @@
 module.exports = {
 	config: {
 		name: "botSwitch",
-		version: "1.0",
+		version: "1.1",
 		author: "Siam",
 		category: "events"
 	},
@@ -11,9 +11,19 @@ module.exports = {
 			global.GoatBot.botStatus = true;
 	},
 
-	onChat: async function () {
+	onChat: async function ({ event }) {
+
+		// If bot is OFF
 		if (global.GoatBot.botStatus === false) {
-			return true; // This blocks ALL commands
+
+			// Allow only .on command
+			if (event.body && event.body.startsWith(".on")) {
+				global.GoatBot.botStatus = true;
+				return false; // allow execution
+			}
+
+			// Block EVERYTHING else
+			return true;
 		}
 	}
 };
