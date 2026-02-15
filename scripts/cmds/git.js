@@ -5,69 +5,76 @@ const path = require("path");
 module.exports = {
   config: {
     name: "git",
-    version: "2.1",
-    author: "Siam + ChatGPT",
+    version: "4.0",
+    author: "Siam",
     countDown: 5,
-    role: 2, // Only bot admin
-    shortDescription: "GitHub Manager",
-    longDescription: "Upload/Delete files to GitHub (Admin Only)",
-    category: "owner"
+    role: 2, // Bot admin only
+    shortDescription: "GitHub Manager (Safe & Fork Compatible)",
+    category: "owner",
+    guide: {
+      en:
+        "Upload:\n" +
+        "{pn} up path/file.js (code)\n" +
+        "Reply method:\nReply to code → {pn} up path/file.js\n\n" +
+        "Delete:\n" +
+        "{pn} del path/file.js [file2.js ...]"
+    }
   },
 
   onStart: async function ({ api, event, args }) {
 
-    // 🔐 EXTRA SECURITY (Replace with your Facebook UID)
-    const ADMIN_UID = "100022952830933";
+    // -------------------- ADMIN CHECK --------------------
+    const ADMIN_UID = "100022952830933"; // <-- CHANGE THIS
+    if (event.senderID !== ADMIN_UID)
+      return api.sendMessage("⛔ Admin only command.", event.threadID);
 
-    if (event.senderID !== ADMIN_UID) {
-      return api.sendMessage("⛔ You are not authorized to use this command.", event.threadID);
-    }
-
-    const OWNER = "NeoKEX";
-    const REPO = "Goatbot-updated";
-    const BRANCH = "main";
-    const TOKEN = process.env.GITHUB_TOKEN; // Use ENV (Render safe)
+    // -------------------- TOKEN & BRANCH --------------------
+    const TOKEN = process.env.GITHUB_TOKEN;
+    const BRANCH = "main"; // Change if your branch is master
 
     if (!TOKEN)
-      return api.sendMessage("❌ GitHub token not found in ENV!", event.threadID);
+      return api.sendMessage("❌ GITHUB_TOKEN not found in Render ENV!", event.threadID);
 
     if (!args[0])
       return api.sendMessage("⚠️ Use: git up/del path/file.js", event.threadID);
 
     const action = args[0];
-    const filePath = args[1];
 
-    if (!filePath)
-      return api.sendMessage("⚠️ File path missing!", event.threadID);
+    // -------------------- AUTO DETECT REPO --------------------
+    const REPO_URL = process.env.GITHUB_REPO || "gamemaker1769-source/gamemaker1769-source"; 
+    // Format: username/repo
+    const [OWNER, REPO] = REPO_URL.split("/");
 
-    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${filePath}`;
+    // ================= UPLOAD =================
+    if (action === "up") {
 
-    try {
+      const filePath = args[1];
+      if (!filePath)
+        return api.sendMessage("⚠️ File path missing!", event.threadID);
 
-      // ================= UPLOAD =================
-      if (action === "up") {
+      let code = args.slice(2).join(" ");
+      if (!code && event.type === "message_reply")
+        code = event.messageReply.body;
 
-        let code = args.slice(2).join(" ");
+      if (!code)
+        return api.sendMessage("⚠️ No code provided!", event.threadID);
 
-        if (!code && event.type === "message_reply") {
-          code = event.messageReply.body;
-        }
+      const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${filePath}`;
 
-        if (!code)
-          return api.sendMessage("⚠️ No code provided!", event.threadID);
+      try {
 
         // Save locally
         const localPath = path.join(process.cwd(), filePath);
         await fs.ensureDir(path.dirname(localPath));
         await fs.writeFile(localPath, code);
 
-        let sha;
+        let sha = null;
         try {
           const check = await axios.get(url, {
             headers: { Authorization: `token ${TOKEN}` }
           });
           sha = check.data.sha;
-        } catch (e) {}
+        } catch {}
 
         await axios.put(
           url,
@@ -85,43 +92,67 @@ module.exports = {
           }
         );
 
-        await api.sendMessage("✅ Uploaded successfully!\n♻️ Restarting bot...", event.threadID);
-
+        await api.sendMessage("✅ Uploaded successfully!\n♻️ Restarting...", event.threadID);
         setTimeout(() => process.exit(1), 2000);
+
+      } catch (err) {
+        return api.sendMessage(
+          "❌ Upload Error:\n" +
+          (err.response?.data?.message || err.message),
+          event.threadID
+        );
       }
+    }
 
-      // ================= DELETE =================
-      if (action === "del") {
+    // ================= DELETE =================
+    if (action === "del") {
 
-        const check = await axios.get(url, {
-          headers: { Authorization: `token ${TOKEN}` }
-        });
+      const files = args.slice(1);
+      if (!files.length)
+        return api.sendMessage("⚠️ Provide at least one file path!", event.threadID);
 
-        await axios.delete(url, {
-          headers: {
-            Authorization: `token ${TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          data: {
-            message: `Delete ${filePath}`,
-            sha: check.data.sha,
-            branch: BRANCH
-          }
-        });
+      let deleted = [];
+      let failed = [];
 
-        const localPath = path.join(process.cwd(), filePath);
-        if (fs.existsSync(localPath)) {
-          fs.unlinkSync(localPath);
+      for (const filePath of files) {
+
+        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${filePath}`;
+
+        try {
+          const check = await axios.get(url, {
+            headers: { Authorization: `token ${TOKEN}` }
+          });
+
+          await axios.delete(url, {
+            headers: {
+              Authorization: `token ${TOKEN}`,
+              "Content-Type": "application/json"
+            },
+            data: {
+              message: `Delete ${filePath}`,
+              sha: check.data.sha,
+              branch: BRANCH
+            }
+          });
+
+          // Delete locally
+          const localPath = path.join(process.cwd(), filePath);
+          if (fs.existsSync(localPath))
+            fs.unlinkSync(localPath);
+
+          deleted.push(filePath);
+
+        } catch (err) {
+          failed.push(filePath + " → " + (err.response?.data?.message || err.message));
         }
-
-        await api.sendMessage("🗑 Deleted successfully!\n♻️ Restarting bot...", event.threadID);
-
-        setTimeout(() => process.exit(1), 2000);
       }
 
-    } catch (err) {
-      console.log(err.response?.data || err);
-      return api.sendMessage("❌ Error occurred!", event.threadID);
+      await api.sendMessage(
+        `🗑 Deleted:\n${deleted.join("\n") || "None"}\n\n❌ Failed:\n${failed.join("\n") || "None"}\n\n♻️ Restarting...`,
+        event.threadID
+      );
+
+      setTimeout(() => process.exit(1), 2000);
     }
   }
 };
