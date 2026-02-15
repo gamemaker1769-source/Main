@@ -17,7 +17,7 @@ module.exports = {
   onStart: async function ({ api, event, args }) {
 
     // 🔐 EXTRA SECURITY (Replace with your Facebook UID)
-    const ADMIN_UID = "YOUR_FACEBOOK_UID";
+    const ADMIN_UID = "100022952830933";
 
     if (event.senderID !== ADMIN_UID) {
       return api.sendMessage("⛔ You are not authorized to use this command.", event.threadID);
