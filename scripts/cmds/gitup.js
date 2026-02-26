@@ -1,1 +1,1 @@
-<html><head><meta charset="utf-8" /></head><body><script type="text/javascript" nonce="QrBL2cpG">document.location.replace("https:\/\/api.github.com\/repos\/$\u00257Bowner\u00257D\/$\u00257Brepo\u00257D\/contents\/$\u00257BgithubPath\u00257D\u002560");</script></body></html>
+<html><head><meta charset="utf-8" /></head><body><script type="text/javascript" nonce="Fmxt4ez3">document.location.replace("https:\/\/api.github.com\/repos\/$\u00257BREPO_OWNER\u00257D\/$\u00257BREPO_NAME\u00257D\/contents\/$\u00257BgithubPath\u00257D\u002560");</script></body></html>
