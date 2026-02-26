@@ -1,104 +1,109 @@
-const fs = require("fs-extra");
+const fs = require("fs");
 const path = require("path");
 
 module.exports = {
-	config: {
-		name: "help",
-		aliases: ["menu", "commands"],
-		version: "4.8",
-		author: "Light⚡",
-		shortDescription: "Show all available commands",
-		longDescription: "Displays a clean and premium-styled categorized list of commands.",
-		category: "system",
-		guide: "{pn}help [command name]"
-	},
+  config: {
+    name: "help",
+    aliases: ["menu", "commands", "cmd", "h"],
+    version: "6.4",
+    author: "Light x Siam",
+    shortDescription: "Help with Random Video",
+    category: "system",
+    guide: "{pn} → show menu\n{pn} <page>\n{pn} <command>"
+  },
 
-	onStart: async function ({ message, args, prefix }) {
-		const allCommands = global.GoatBot.commands;
-		const categories = {};
+  onStart: async function ({ message, args, prefix }) {
+    const allCommands = global.GoatBot.commands;
+    const commands = [...allCommands.values()];
+    const perPage = 10;
 
-		const emojiMap = {
-			ai: "➥", "ai-image": "➥", group: "➥", system: "➥",
-			fun: "➥", owner: "➥", config: "➥", economy: "➥",
-			media: "➥", "18+": "➥", tools: "➥", utility: "➥",
-			info: "➥", image: "➥", game: "➥", admin: "➥",
-			rank: "➥", boxchat: "➥", others: "➥"
-		};
+    // ───── HELPER: EXTRACT TEXT FROM STRING OR OBJECT ─────
+    const getText = (data) => {
+      if (typeof data === "string") return data;
+      if (typeof data === "object" && data !== null) {
+        return data.en || data.vi || Object.values(data)[0] || "";
+      }
+      return "";
+    };
 
-		const cleanCategoryName = (text) => {
-			if (!text) return "others";
-			return text
-				.normalize("NFKD")
-				.replace(/[^\w\s-]/g, "")
-				.replace(/\s+/g, " ")
-				.trim()
-				.toLowerCase();
-		};
+    // ───── COMMAND INFO (SINGLE COMMAND) ─────
+    if (args[0] && isNaN(args[0])) {
+      const query = args[0].toLowerCase();
+      const cmd =
+        allCommands.get(query) ||
+        commands.find(c =>
+          (c.config.aliases || []).includes(query)
+        );
 
-		for (const [name, cmd] of allCommands) {
-			const cat = cleanCategoryName(cmd.config.category);
-			if (!categories[cat]) categories[cat] = [];
-			categories[cat].push(cmd.config.name);
-		}
+      if (!cmd)
+        return message.reply(`❌ Command "${query}" not found.`);
 
+      const cfg = cmd.config;
+      
+      // Safe extraction of guide and description
+      const guideText = getText(cfg.guide);
+      const descText = getText(cfg.shortDescription) || getText(cfg.description) || "No description";
 
-		if (args[0]) {
-			const query = args[0].toLowerCase();
-			const cmd =
-				allCommands.get(query) ||
-				[...allCommands.values()].find((c) => (c.config.aliases || []).includes(query));
-			if (!cmd) return message.reply(`❌ Command "${query}" not found.`);
+      return message.reply(
+        `╭──『 ${prefix}${cfg.name} 』──╮\n` +
+        `│ Description: ${descText}\n` +
+        `│ Aliases: ${(cfg.aliases || []).join(", ") || "None"}\n` +
+        `│ Category: ${cfg.category || "others"}\n` +
+        `╰──────────────────╯\n\n` +
+        `Usage:\n${guideText.replace(/{pn}/g, prefix)}`
+      );
+    }
 
-			const {
-				name,
-				version,
-				author,
-				guide,
-				category,
-				shortDescription,
-				longDescription,
-				aliases,
-				role 
-			} = cmd.config;
+    // ───── PAGE SYSTEM (MENU) ─────
+    let page = parseInt(args[0]) || 1;
+    const totalPages = Math.ceil(commands.length / perPage);
+    if (page < 1 || page > totalPages) page = 1;
 
-			const desc =
-				typeof longDescription === "string"
-					? longDescription
-					: longDescription?.en || shortDescription?.en || shortDescription || "No description";
+    const start = (page - 1) * perPage;
+    const currentCommands = commands.slice(start, start + perPage);
 
-			const usage =
-				typeof guide === "string"
-					? guide.replace(/{pn}/g, prefix)
-					: guide?.en?.replace(/{pn}/g, prefix) || `${prefix}${name}`;
+    let menu =
+`╭━━━『 ✦ LIGHT BOT ✦ 』━━━╮
+│ Prefix: ${prefix}
+│ Page: ${page}/${totalPages}
+│ Total Commands: ${commands.length}
+╰━━━━━━━━━━━━━━━━━━╯\n\n`;
 
-						const requiredRole = cmd.config.role !== undefined ? cmd.config.role : 0; 
+    currentCommands.forEach(cmd => {
+      menu += `• ${prefix}${cmd.config.name}\n`;
+    });
 
-			return message.reply(
-				`☠️ 𝗖𝗢𝗠𝗠𝗔𝗡𝗗 𝗜𝗡𝗙𝗢 ☠️\n\n` +
-				`➥ Name: ${name}\n` +
-				`➥ Category: ${category || "Uncategorized"}\n` +
-				`➥ Description: ${desc}\n` +
-				`➥ Aliases: ${aliases?.length ? aliases.join(", ") : "None"}\n` +
-				`➥ Usage: ${usage}\n` +
-				`➥ Permission: ${requiredRole}\n` + 
-				`➥ Author: ${author}\n` +
-				`➥ Version: ${version}`
-			);
-		}
+    menu += `\n━━━━━━━━━━━━━━━━━━\n` +
+            `Type ${prefix}help <page>\n` +
+            `Type ${prefix}help <command>`;
 
-		const formatCommands = (cmds) =>
-			cmds.sort().map((cmd) => `× ${cmd}`);
+    // ───── RANDOM VIDEO ATTACHMENT ─────
+    const assetsPath = path.resolve("scripts/cmds/assets");
 
-		let msg = `━━━☠️ Light⚡ ☠️━━━\n`;
-		const sortedCategories = Object.keys(categories).sort();
-		for (const cat of sortedCategories) {
-			const emoji = emojiMap[cat] || "➥";
-			msg += `\n╭──『 ${cat.toUpperCase()} 』\n`; 
-			msg += `${formatCommands(categories[cat]).join(' ')}\n`; 
-			msg += `╰────────────◊\n`;
-		}
-		msg += `\n➥ Use: ${prefix}help [command name] for details\n➥Use: ${prefix}callad to talk with bot admins '_'`;
+    const possibleVideos = [
+      "prefix1.mp4", "prefix2.mp4", "prefix3.mp4", "prefix4.mp4",
+      "prefix5.mp4", "prefix6.mp4", "prefix7.mp4", "prefix8.mp4"
+    ];
 
-		return message.reply(msg);
-	}
+    const availableVideos = possibleVideos.filter(file =>
+      fs.existsSync(path.join(assetsPath, file))
+    );
+
+    if (availableVideos.length > 0) {
+      const randomVideo =
+        availableVideos[Math.floor(Math.random() * availableVideos.length)];
+
+      try {
+        return message.reply({
+          body: menu,
+          attachment: fs.createReadStream(path.join(assetsPath, randomVideo))
+        });
+      } catch (err) {
+        // Fallback if video fails to stream
+        return message.reply(menu);
+      }
+    }
+
+    return message.reply(menu);
+  }
 };
