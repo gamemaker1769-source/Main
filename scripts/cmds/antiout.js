@@ -2,7 +2,7 @@ module.exports = {
  config: {
  name: "antiout",
  version: "1.0",
- author: "Chitron Bhattacharjee",
+ author: "Siam",
  countDown: 5,
  role: 1, // Only admin can use this command
  shortDescription: {
@@ -19,10 +19,10 @@ module.exports = {
 
  langs: {
  en: {
- turnedOn: "🛡️ Anti-out feature has been enabled for this group",
- turnedOff: "🛡️ Anti-out feature has been disabled for this group",
+ turnedOn: "🛡️ Anti-out on 🟢",
+ turnedOff: "🛡️ Anti-out off 🔴",
  missingPermission: "❌ Sorry boss! I couldn't add the user back.\nUser %1 might have blocked me or doesn't have messenger option enabled.",
- addedBack: "⚠️ Attention %1!\nThis group belongs to my boss!\nYou need admin clearance to leave this group!"
+ addedBack: ""
  }
  },
 
