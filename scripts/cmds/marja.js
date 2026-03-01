@@ -4,7 +4,7 @@ module.exports = {
   config: {
     name: "marja",
     version: "1.0",
-    author: "RAFI",
+    author: "Siam",
     shortDescription: { en: "Send profile picture then voice separately" },
     longDescription: { en: "First sends HD profile picture, then voice message separately" },
     category: "fun",
